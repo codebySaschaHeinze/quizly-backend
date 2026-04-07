@@ -1,7 +1,6 @@
 from django.conf import settings
-from rest_framework.exceptions import AuthenticationFailed
-from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.tokens import RefreshToken
 
 
 def set_auth_cookies(response, access_token, refresh_token):
@@ -41,19 +40,3 @@ def blacklist_refresh_token_from_cookies(request):
         token.blacklist()
     except TokenError:
         return
-    
-
-def get_access_token_from_refresh_cookie(request):
-    """Create a new access token from the refresh token cookie."""
-
-    refresh_token = request.COOKIES.get(settings.AUTH_COOKIE_REFRESH)
-
-    if not refresh_token:
-        raise AuthenticationFailed('Refresh token missing.')
-
-    try:
-        refresh = RefreshToken(refresh_token)
-    except TokenError as exc:
-        raise AuthenticationFailed('Refresh token invalid.') from exc
-
-    return str(refresh.access_token)

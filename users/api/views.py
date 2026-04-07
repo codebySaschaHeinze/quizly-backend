@@ -1,7 +1,9 @@
 from django.conf import settings
 from rest_framework import status
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.views import APIView
 
@@ -9,7 +11,6 @@ from .serializers import LoginSerializer, RegisterSerializer
 from .utils import (
     blacklist_refresh_token_from_cookies,
     clear_auth_cookies,
-    get_access_token_from_refresh_cookie,
     set_auth_cookies,
 )
 
@@ -87,10 +88,19 @@ class LogoutView(APIView):
     
 
 class TokenRefreshView(APIView):
-    """Refresh the access token using the refresh token cookie."""
+    """Refresh access and refresh tokens using the refresh token cookie."""
 
     def post(self, request):
-        access_token = get_access_token_from_refresh_cookie(request)
+        refresh_token = request.COOKIES.get(settings.AUTH_COOKIE_REFRESH)
+
+        if not refresh_token:
+            raise AuthenticationFailed('Refresh token missing.')
+
+        serializer = TokenRefreshSerializer(data={'refresh': refresh_token})
+        serializer.is_valid(raise_exception=True)
+
+        access_token = serializer.validated_data['access']
+        new_refresh_token = serializer.validated_data.get('refresh')
 
         response = Response(
             {
@@ -106,5 +116,14 @@ class TokenRefreshView(APIView):
             secure=settings.AUTH_COOKIE_SECURE,
             samesite=settings.AUTH_COOKIE_SAMESITE,
         )
+
+        if new_refresh_token:
+            response.set_cookie(
+                key=settings.AUTH_COOKIE_REFRESH,
+                value=new_refresh_token,
+                httponly=settings.AUTH_COOKIE_HTTP_ONLY,
+                secure=settings.AUTH_COOKIE_SECURE,
+                samesite=settings.AUTH_COOKIE_SAMESITE,
+            )
 
         return response

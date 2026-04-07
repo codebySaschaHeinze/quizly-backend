@@ -1,5 +1,6 @@
 from django.conf import settings
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 
 
 class CookieJWTAuthentication(JWTAuthentication):
@@ -10,13 +11,23 @@ class CookieJWTAuthentication(JWTAuthentication):
 
         if header is not None:
             raw_token = self.get_raw_token(header)
-        else:
-            raw_token = request.COOKIES.get(settings.AUTH_COOKIE_ACCESS)
+
+            if raw_token is None:
+                return None
+
+            validated_token = self.get_validated_token(raw_token)
+            user = self.get_user(validated_token)
+            return user, validated_token
+
+        raw_token = request.COOKIES.get(settings.AUTH_COOKIE_ACCESS)
 
         if raw_token is None:
             return None
 
-        validated_token = self.get_validated_token(raw_token)
-        user = self.get_user(validated_token)
+        try:
+            validated_token = self.get_validated_token(raw_token)
+        except (InvalidToken, TokenError):
+            return None
 
+        user = self.get_user(validated_token)
         return user, validated_token

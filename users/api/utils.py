@@ -45,6 +45,7 @@ def blacklist_refresh_token_from_cookies(request):
 
 def get_access_token_from_refresh_cookie(request):
     """Create a new access token from the refresh token cookie."""
+
     refresh_token = request.COOKIES.get(settings.AUTH_COOKIE_REFRESH)
 
     if not refresh_token:

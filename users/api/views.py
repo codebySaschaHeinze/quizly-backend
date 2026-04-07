@@ -1,3 +1,4 @@
+from django.conf import settings
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -8,6 +9,7 @@ from .serializers import LoginSerializer, RegisterSerializer
 from .utils import (
     blacklist_refresh_token_from_cookies,
     clear_auth_cookies,
+    get_access_token_from_refresh_cookie,
     set_auth_cookies,
 )
 
@@ -81,4 +83,28 @@ class LogoutView(APIView):
             status=status.HTTP_200_OK,
         )
         clear_auth_cookies(response)
+        return response
+    
+
+class TokenRefreshView(APIView):
+    """Refresh the access token using the refresh token cookie."""
+
+    def post(self, request):
+        access_token = get_access_token_from_refresh_cookie(request)
+
+        response = Response(
+            {
+                'detail': 'Token refreshed',
+            },
+            status=status.HTTP_200_OK,
+        )
+
+        response.set_cookie(
+            key=settings.AUTH_COOKIE_ACCESS,
+            value=access_token,
+            httponly=settings.AUTH_COOKIE_HTTP_ONLY,
+            secure=settings.AUTH_COOKIE_SECURE,
+            samesite=settings.AUTH_COOKIE_SAMESITE,
+        )
+
         return response

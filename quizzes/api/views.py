@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.db import transaction
 from rest_framework import status
+from rest_framework.exceptions import APIException
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -40,34 +41,44 @@ class QuizListView(APIView):
             audio_path = youtube_service.download_audio(normalized_url)
             transcript = transcription_service.transcribe_audio(audio_path)
             quiz_data = gemini_service.generate_quiz_data(transcript)
-
-            with transaction.atomic():
-                quiz = Quiz.objects.create(
-                    user=request.user,
-                    title=quiz_data['title'],
-                    description=quiz_data['description'],
-                    video_url=normalized_url,
-                )
-
-                questions = [
-                    Question(
-                        quiz=quiz,
-                        question_title=question_data['question_title'],
-                        question_options=question_data['question_options'],
-                        answer=question_data['answer'],
-                    )
-                    for question_data in quiz_data['questions']
-                ]
-
-                Question.objects.bulk_create(questions)
-
-            quiz = Quiz.objects.prefetch_related('questions').get(pk=quiz.pk)
-            response_serializer = QuizSerializer(quiz)
-            return Response(response_serializer.data, status=status.HTTP_201_CREATED)
-
+            quiz = self.create_quiz_with_questions(request.user, normalized_url, quiz_data)
+            return self.build_quiz_response(quiz)
+        except APIException:
+            raise
+        except Exception as exc:
+            raise APIException('Quiz generation failed.') from exc
         finally:
             if audio_path and audio_path.exists():
                 audio_path.unlink()
+
+    def create_quiz_with_questions(self, user, video_url, quiz_data):
+        """Create one quiz and all related questions."""
+        with transaction.atomic():
+            quiz = Quiz.objects.create(
+                user=user,
+                title=quiz_data['title'],
+                description=quiz_data['description'],
+                video_url=video_url,
+            )
+
+            questions = [
+                Question(
+                    quiz=quiz,
+                    question_title=question_data['question_title'],
+                    question_options=question_data['question_options'],
+                    answer=question_data['answer'],
+                )
+                for question_data in quiz_data['questions']
+            ]
+
+            Question.objects.bulk_create(questions)
+
+        return Quiz.objects.prefetch_related('questions').get(pk=quiz.pk)
+
+    def build_quiz_response(self, quiz):
+        """Build the response for a created quiz."""
+        response_serializer = QuizSerializer(quiz)
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
 
 class QuizDetailView(APIView):

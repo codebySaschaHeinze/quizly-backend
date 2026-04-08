@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import transaction
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -8,7 +9,9 @@ from quizzes.models import Question, Quiz
 
 from .gemini_service import GeminiQuizGenerationService
 from .serializers import QuizCreateSerializer, QuizSerializer, QuizUpdateSerializer
+from .transcription_service import AudioTranscriptionService
 from .utils import get_quiz_for_user_or_raise, normalize_youtube_url
+from .youtube_service import YouTubeAudioService
 
 
 class QuizListView(APIView):
@@ -27,45 +30,44 @@ class QuizListView(APIView):
 
         normalized_url = normalize_youtube_url(serializer.validated_data['url'])
 
-        transcript = '''
-Python is a high-level programming language known for its readability.
-It is widely used for web development, data analysis, automation, and artificial intelligence.
-Python uses indentation to define code blocks instead of curly braces.
-Variables in Python do not need an explicit type declaration.
-Lists are mutable, while tuples are immutable.
-A function is defined with the def keyword.
-Dictionaries store data as key-value pairs.
-Python supports object-oriented programming.
-The package manager for Python is called pip.
-Virtual environments help isolate project dependencies.
-'''.strip()
-
+        youtube_service = YouTubeAudioService(settings.BASE_DIR)
+        transcription_service = AudioTranscriptionService()
         gemini_service = GeminiQuizGenerationService()
-        quiz_data = gemini_service.generate_quiz_data(transcript)
 
-        with transaction.atomic():
-            quiz = Quiz.objects.create(
-                user=request.user,
-                title=quiz_data['title'],
-                description=quiz_data['description'],
-                video_url=normalized_url,
-            )
+        audio_path = None
 
-            questions = [
-                Question(
-                    quiz=quiz,
-                    question_title=question_data['question_title'],
-                    question_options=question_data['question_options'],
-                    answer=question_data['answer'],
+        try:
+            audio_path = youtube_service.download_audio(normalized_url)
+            transcript = transcription_service.transcribe_audio(audio_path)
+            quiz_data = gemini_service.generate_quiz_data(transcript)
+
+            with transaction.atomic():
+                quiz = Quiz.objects.create(
+                    user=request.user,
+                    title=quiz_data['title'],
+                    description=quiz_data['description'],
+                    video_url=normalized_url,
                 )
-                for question_data in quiz_data['questions']
-            ]
 
-            Question.objects.bulk_create(questions)
+                questions = [
+                    Question(
+                        quiz=quiz,
+                        question_title=question_data['question_title'],
+                        question_options=question_data['question_options'],
+                        answer=question_data['answer'],
+                    )
+                    for question_data in quiz_data['questions']
+                ]
 
-        quiz = Quiz.objects.prefetch_related('questions').get(pk=quiz.pk)
-        response_serializer = QuizSerializer(quiz)
-        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+                Question.objects.bulk_create(questions)
+
+            quiz = Quiz.objects.prefetch_related('questions').get(pk=quiz.pk)
+            response_serializer = QuizSerializer(quiz)
+            return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+        finally:
+            if audio_path and audio_path.exists():
+                audio_path.unlink()
 
 
 class QuizDetailView(APIView):

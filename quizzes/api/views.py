@@ -6,6 +6,7 @@ from rest_framework.views import APIView
 
 from quizzes.models import Question, Quiz
 
+from .gemini_service import GeminiQuizGenerationService
 from .serializers import QuizCreateSerializer, QuizSerializer, QuizUpdateSerializer
 from .utils import get_quiz_for_user_or_raise, normalize_youtube_url
 
@@ -26,51 +27,41 @@ class QuizListView(APIView):
 
         normalized_url = normalize_youtube_url(serializer.validated_data['url'])
 
+        transcript = '''
+Python is a high-level programming language known for its readability.
+It is widely used for web development, data analysis, automation, and artificial intelligence.
+Python uses indentation to define code blocks instead of curly braces.
+Variables in Python do not need an explicit type declaration.
+Lists are mutable, while tuples are immutable.
+A function is defined with the def keyword.
+Dictionaries store data as key-value pairs.
+Python supports object-oriented programming.
+The package manager for Python is called pip.
+Virtual environments help isolate project dependencies.
+'''.strip()
+
+        gemini_service = GeminiQuizGenerationService()
+        quiz_data = gemini_service.generate_quiz_data(transcript)
+
         with transaction.atomic():
             quiz = Quiz.objects.create(
                 user=request.user,
-                title='Temporary quiz title',
-                description='Temporary quiz description',
+                title=quiz_data['title'],
+                description=quiz_data['description'],
                 video_url=normalized_url,
             )
 
-            Question.objects.bulk_create(
-                [
-                    Question(
-                        quiz=quiz,
-                        question_title='Temporary question 1',
-                        question_options=[
-                            'Option A',
-                            'Option B',
-                            'Option C',
-                            'Option D',
-                        ],
-                        answer='Option A',
-                    ),
-                    Question(
-                        quiz=quiz,
-                        question_title='Temporary question 2',
-                        question_options=[
-                            'Answer 1',
-                            'Answer 2',
-                            'Answer 3',
-                            'Answer 4',
-                        ],
-                        answer='Answer 2',
-                    ),
-                    Question(
-                        quiz=quiz,
-                        question_title='Temporary question 3',
-                        question_options=[
-                            'Choice One',
-                            'Choice Two',
-                            'Choice Three',
-                            'Choice Four',
-                        ],
-                        answer='Choice Three',
-                    ),
-                ]
-            )
+            questions = [
+                Question(
+                    quiz=quiz,
+                    question_title=question_data['question_title'],
+                    question_options=question_data['question_options'],
+                    answer=question_data['answer'],
+                )
+                for question_data in quiz_data['questions']
+            ]
+
+            Question.objects.bulk_create(questions)
 
         quiz = Quiz.objects.prefetch_related('questions').get(pk=quiz.pk)
         response_serializer = QuizSerializer(quiz)

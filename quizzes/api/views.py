@@ -1,3 +1,5 @@
+import logging
+
 from django.conf import settings
 from django.db import transaction
 from rest_framework import status
@@ -9,10 +11,14 @@ from rest_framework.views import APIView
 from quizzes.models import Question, Quiz
 
 from .gemini_service import GeminiQuizGenerationService
+from google.genai.errors import ServerError
 from .serializers import QuizCreateSerializer, QuizSerializer, QuizUpdateSerializer
 from .transcription_service import AudioTranscriptionService
 from .utils import get_quiz_for_user_or_raise, normalize_youtube_url
 from .youtube_service import YouTubeAudioService
+
+
+logger = logging.getLogger(__name__)
 
 
 class QuizListView(APIView):
@@ -45,7 +51,11 @@ class QuizListView(APIView):
             return self.build_quiz_response(quiz)
         except APIException:
             raise
+        except ServerError as exc:
+            logger.exception('Gemini service unavailable during quiz generation.')
+            raise QuizGenerationUnavailable() from exc
         except Exception as exc:
+            logger.exception('Unexpected error during quiz generation.')
             raise APIException('Quiz generation failed.') from exc
         finally:
             if audio_path and audio_path.exists():
@@ -104,3 +114,11 @@ class QuizDetailView(APIView):
         quiz = get_quiz_for_user_or_raise(request.user, quiz_id)
         quiz.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+    
+
+class QuizGenerationUnavailable(APIException):
+    """Return a 503 when the quiz generation service is temporarily unavailable."""
+
+    status_code = 503
+    default_detail = 'Quiz generation service temporarily unavailable. Please try again.'
+    default_code = 'service_unavailable'

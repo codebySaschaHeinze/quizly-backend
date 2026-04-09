@@ -231,7 +231,7 @@ That means:
 ## Project Structure
 
 ```text
-quizly/
+quizly-backend/
 ├─ core/
 │  ├─ __init__.py
 │  ├─ settings.py
@@ -283,8 +283,8 @@ quizly/
 ### 1. Clone the repository
 
 ```text
-git clone https://github.com/codebySaschaHeinze/quizly.git
-cd quizly
+git clone https://github.com/codebySaschaHeinze/quizly-backend.git
+cd quizly-backend
 ```
 
 ### 2. Create and activate a virtual environment

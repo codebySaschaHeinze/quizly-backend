@@ -1,8 +1,10 @@
 import json
+import time
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from google import genai
+from google.genai.errors import ServerError
 
 from .utils import remove_markdown_code_fences
 
@@ -11,6 +13,7 @@ class GeminiQuizGenerationService:
     """Generate structured quiz data from a transcript using Gemini."""
 
     model_name = 'gemini-2.5-flash'
+    retry_delays = [5, 10]
 
     def __init__(self):
         if not settings.GEMINI_API_KEY:
@@ -21,37 +24,37 @@ class GeminiQuizGenerationService:
     def build_prompt(self, transcript):
         """Build the prompt for quiz generation from a transcript."""
         return f'''
-            You are a quiz generator.
+You are a quiz generator.
 
-            Create a quiz based on the following transcript.
+Create a quiz based on the following transcript.
 
-            Return valid JSON only.
-            Do not add markdown code fences.
-            Do not add explanations.
+Return valid JSON only.
+Do not add markdown code fences.
+Do not add explanations.
 
-            The JSON must follow exactly this structure:
-            {{
-            "title": "Quiz title",
-            "description": "Short quiz description",
-            "questions": [
-                {{
-                "question_title": "Question text",
-                "question_options": ["Option 1", "Option 2", "Option 3", "Option 4"],
-                "answer": "One of the four options"
-                }}
-            ]
-            }}
+The JSON must follow exactly this structure:
+{{
+  "title": "Quiz title",
+  "description": "Short quiz description",
+  "questions": [
+    {{
+      "question_title": "Question text",
+      "question_options": ["Option 1", "Option 2", "Option 3", "Option 4"],
+      "answer": "One of the four options"
+    }}
+  ]
+}}
 
-            Rules:
-            - Create exactly 10 questions.
-            - Each question must have exactly 4 options.
-            - The answer must exactly match one option.
-            - The quiz must be based only on the transcript content.
-            - Keep title and description short and clear.
+Rules:
+- Create exactly 10 questions.
+- Each question must have exactly 4 options.
+- The answer must exactly match one option.
+- The quiz must be based only on the transcript content.
+- Keep title and description short and clear.
 
-            Transcript:
-            {transcript}
-            '''.strip()
+Transcript:
+{transcript}
+'''.strip()
 
     def parse_quiz_data(self, raw_text):
         """Parse and validate quiz JSON returned by Gemini."""
@@ -133,10 +136,22 @@ class GeminiQuizGenerationService:
     def generate_quiz_data(self, transcript):
         """Generate validated quiz data from a transcript."""
         prompt = self.build_prompt(transcript)
+        response_text = self.generate_with_retry(prompt)
+        return self.parse_quiz_data(response_text)
 
-        response = self.client.models.generate_content(
-            model=self.model_name,
-            contents=prompt,
-        )
+    def generate_with_retry(self, prompt):
+        """Generate quiz text with small retries for temporary Gemini outages."""
+        attempts = len(self.retry_delays) + 1
 
-        return self.parse_quiz_data(response.text)
+        for attempt in range(attempts):
+            try:
+                response = self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                )
+                return response.text
+            except ServerError:
+                if attempt >= len(self.retry_delays):
+                    raise
+
+                time.sleep(self.retry_delays[attempt])

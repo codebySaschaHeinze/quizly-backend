@@ -279,7 +279,7 @@ quizly/
 ### 1. Clone the repository
 
 ```text
-git clone <your-repository-url>
+git clone https://github.com/codebySaschaHeinze/quizly.git
 cd quizly
 ```
 
@@ -301,16 +301,8 @@ source .venv/bin/activate
 
 ### 3. Install dependencies
 
-If `requirements.txt` is already present:
-
 ```text
 pip install -r requirements.txt
-```
-
-If no `requirements.txt` exists yet, install the project packages manually:
-
-```text
-pip install django djangorestframework django-cors-headers djangorestframework-simplejwt python-dotenv google-genai yt-dlp openai-whisper
 ```
 
 ### 4. Install FFmpeg

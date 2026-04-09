@@ -139,6 +139,10 @@ Request body:
 }
 ```
 
+Note:
+
+Short YouTube URLs such as https://youtu.be/... are also supported.
+
 Success response:
 
 ```json

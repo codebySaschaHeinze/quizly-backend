@@ -31,7 +31,7 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DEBUG", "False") == "True"
 
-ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
+ALLOWED_HOSTS = ["127.0.0.1", "localhost", "api.quizly.saschaheinze.de"]
 
 
 # Application definition
@@ -135,6 +135,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5500",
     "http://127.0.0.1:3000",
     "http://localhost:3000",
+    "https://quizly.saschaheinze.de"
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -146,7 +147,7 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
@@ -155,7 +156,7 @@ SIMPLE_JWT = {
 
 AUTH_COOKIE_ACCESS = 'access_token'
 AUTH_COOKIE_REFRESH = 'refresh_token'
-AUTH_COOKIE_SECURE = False
+AUTH_COOKIE_SECURE = True
 AUTH_COOKIE_HTTP_ONLY = True
 AUTH_COOKIE_SAMESITE = 'Lax'
 
@@ -164,4 +165,8 @@ CSRF_TRUSTED_ORIGINS = [
     'http://localhost:5500',
     'http://127.0.0.1:3000',
     'http://localhost:3000',
+    'https://quizly.saschaheinze.de',
+    'https://api.quizly.saschaheinze.de',
 ]
+
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
